@@ -1,5 +1,7 @@
-// Groups all coroutine frames for a coroutine function.
-// This is a best effort system. This will not give right answers as walking up the coroutine parent frames we don't know when to stop.
+// Groups all coroutine frames for a coroutine function into unique stack walks.
+// This helps in finding what all coroutines are present in process/dump.
+// This is a best effort system. The output will mostly be good but can have some noise as
+// we don't know when to stop walking up the coroutine parent frames.
 // parameters:
 // coro_fn_address  : (String) Address of coroutine function for which you want to find all stack frames.
 //                    You can get this value from output of `x FabricRuntime!*TStore*TryGetValueAsync*_ResumeCoro$2`.
