@@ -29,7 +29,11 @@ function is_valid_address(address) {
     return address > 0x100000; // todo: should be some high value;
 }
 
-function walk_parent_chain(child, depth) {
+function is_valid_function_address(address, dll_base_start, dll_base_end) {
+    return address >= dll_base_start && address <= dll_base_end;
+}
+
+function walk_parent_chain(child, depth, dll_base_start, dll_base_end) {
     if (depth <= 0) {
         return [];
     }
@@ -58,8 +62,12 @@ function walk_parent_chain(child, depth) {
         var parent_coro_address = parseInt(parent_coro_address_str, 16);
         var parent_fn_address = host.memory.readMemoryValues(parent_coro_address, 1, 8);
 
+        if (!is_valid_address(parent_coro_address) || !is_valid_function_address(parseInt(parent_fn_address, 16), dll_base_start, dll_base_end)) {
+            return [child];
+        }
+
         // log("  > " + parent_coro_address_str + " " + parent_fn_address);
-        var stack = walk_parent_chain({co_address: parent_coro_address, fn_address: parent_fn_address}, depth - 1);
+        var stack = walk_parent_chain({co_address: parent_coro_address, fn_address: parent_fn_address}, depth - 1, dll_base_start, dll_base_end);
         stack.push(child);
         return stack;
     }
@@ -71,13 +79,16 @@ function walk_parent_chain(child, depth) {
     return [child];
 }
 
-function find_coroutines(coro_fn_addres, limit, depth) {
+function find_coroutines(coro_fn_addres, limit, depth, dll_base_start, dll_base_end) {
+    dll_base_start = parseInt(dll_base_start, 16);
+    dll_base_end = parseInt(dll_base_end, 16);
+
     var parents = find_all_coro_frames(coro_fn_addres, limit);
     var fn_stacks = new Map();
     for (let i = 0; i < parents.length; ++i) {
         var parent  = parents[i];
-        log("> " + parent.co_address + " " + parent.fn_address);
-        var stack = walk_parent_chain(parent, depth);
+        // log("> " + parent.co_address + " " + parent.fn_address);
+        var stack = walk_parent_chain(parent, depth, dll_base_start, dll_base_end);
         var fn_stack = stack.reduce(function(acc, s) { return acc + "," + s.fn_address; }, "");
 
         if (fn_stacks.has(fn_stack)) {
