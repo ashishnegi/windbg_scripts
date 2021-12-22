@@ -63,7 +63,12 @@ function is_valid_function_address(address, dll_base_start, dll_base_end) {
 }
 
 function find_all_coro_frames(coro_fn_addres, first_n) {
+    // Used 0x40 to reach the coroutine_handle address where address of function is stored.
+    // dq gives value at that location.
     var lines = exec("!mex.fel -x \"dq 0x${@#Line}+0x40 L1\"  !mex.head -n " + first_n + " !mex.cut -f 5 !mex.grep busy !ext.heap -srch " + coro_fn_addres);
+
+    // exepcted format of lines is array of
+    //          <coroutine_handle_memory_address> <coroutine_function_address>
     var parent_coro_frames = [];
     for (line of lines) {
         if (!line) {
@@ -94,6 +99,8 @@ function walk_parent_chain(child, call_stack_depth, dll_base_start, dll_base_end
     var heap_adress = co_address - 0x40;
     var parent_co_ref_addres = heap_adress + 0x10;
 
+    // since we don't know when to stop walking up the frame,
+    // make some good guesses by checking if memory addresses look valid or not.
     if (!is_valid_address(parent_co_ref_addres)) {
         return [];
     }
