@@ -42,6 +42,8 @@ exe_or_dll!<lambda_82983005e362cd54ae843770683bcb01>$_ResumeCoro$2::operator() [
 ```
 
 ### Others:
+Please check the source file for documentation.
+
 1. all_unique_coroutine_frames
 1. print_stack_from_addresses
 
