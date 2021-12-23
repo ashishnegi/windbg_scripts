@@ -1,18 +1,20 @@
-// Windbg extension functions to help with coroutines debug analysis.
-//
-// Usage:
-// 1. save this file to a location.
-// In windbg,
-// > .load jsprovider.dll
-// > .scriptload <Path_to_this_file>\find_coro.js
-// Now you can call methods like for unique_coroutine_frames
-// > dx @$scriptContents.unique_coroutine_frames("00007ff62318bf80", 600, 3, 0x00007ff621310000, 0x00007ff624210000)
-//
-// Dependencies: `mex.dll` windbg extension. You can download it from https://aka.ms/mex and then
-// > .load <path_to_mex>/mex.dll
-//
-// Run below command to reflect any changes you make to this file within same debugging session:
-// > .scriptunload D:\windbg\scripts\find_coro.js;
+/**
+* Windbg extension functions to help with coroutines debug analysis.
+*
+* Usage:
+* 1. save this file to a location.
+* In windbg,
+* > .load jsprovider.dll
+* > .scriptload <Path_to_this_file>\find_coro.js
+* Now you can call methods like for unique_coroutine_frames
+* > dx @$scriptContents.unique_coroutine_frames("00007ff62318bf80", 600, 3, 0x00007ff621310000, 0x00007ff624210000)
+*
+* Dependencies: `mex.dll` windbg extension. You can download it from https://aka.ms/mex and then
+* > .load <path_to_mex>/mex.dll
+*
+* Run below command to reflect any changes you make to this file within same debugging session:
+* > .scriptunload D:\windbg\scripts\find_coro.js;
+*/
 
 // unique_coroutine_frames:
 // Groups all coroutine frames for a coroutine function into unique stack walks.
@@ -30,7 +32,7 @@
 //                    You can get dll_base_start/end from e.g. `lmDf m exe_or_dll_name`
 //
 // example usage:
-//> dx @$scriptContents.unique_coroutine_frames("00007ff62318bf80", 600, 3, 0x00007ff621310000, 0x00007ff624210000)
+//> dx @$scriptContents.unique_coroutine_frames("00007ff62318bf80", 8, 3, 0x00007ff621310000, 0x00007ff624210000)
 // Printing Map.
 // Map size: 1
 // 00007ff62318bf80,0x7ff623035ee0,0x7ff62210b9f0, => 8
@@ -72,6 +74,8 @@ function unique_coroutine_frames(coro_fn_addres, first_n, call_stack_depth, dll_
 // all_unique_coroutine_frames:
 // coro_pattern : (String) example: exe_or_dll_name!*class_name*func_name*_ResumeCoro$2 or more generic pattern.
 // see doc for `unique_coroutine_frames` for other parameters.
+// example usage:
+// > dx @$scriptContents.all_unique_coroutine_frames("exe_or_dll!*fn*_ResumeCoro$2", 10, 3, 0x00007ff621310000, 0x00007ff624210000)
 function all_unique_coroutine_frames(coro_pattern, first_n, call_stack_depth, dll_base_start, dll_base_end) {
     var lines = exec("x " + coro_pattern);
 
@@ -96,7 +100,7 @@ function all_unique_coroutine_frames(coro_pattern, first_n, call_stack_depth, dl
 // Prints function names for stack represented by addresses.
 // addresses : (String) command separated list of addresses.
 // example usage:
-// dx @$scriptContents.print_stack_from_addresses(",0x7ff62210b9f0,0x7ff623035ee0,00007ff62318bf80")
+// > dx @$scriptContents.print_stack_from_addresses(",0x7ff62210b9f0,0x7ff623035ee0,00007ff62318bf80")
 function print_stack_from_addresses(addresses) {
     for (var address of addresses.split(',')) {
         if (!address || address.length == 0) {
@@ -104,6 +108,27 @@ function print_stack_from_addresses(addresses) {
         }
         exec(" !mex.head -n 1 u " + address, true /*quiet*/);
     }
+}
+
+// walk_coroutine_chain:
+// Walks the coroutine chain starting from child to the parent in async call stack.
+// coro_frame_address : (Int) address of child coroutine_frame from where to start the async stack walk.
+// see doc for `unique_coroutine_frames` for other parameters.
+// example usage:
+// > dx @$scriptContents.walk_coroutine_chain("365840500768", 4, 0x00007ff621310000, 0x00007ff624210000)
+//
+// You can get coroutine frame address from below command:
+//    > !mex.fel -x "dq 0x${@#Line}+0x40 L1" !mex.head -n <limit_to_n_output> !mex.cut -f 5 !mex.grep busy !ext.heap -srch <coroutine_func_address>
+function walk_coroutine_chain(coro_frame_address, call_stack_depth, dll_base_start, dll_base_end) {
+    var coro_fn = host.memory.readMemoryValues(coro_frame_address, 1, 8);
+    var stack = walk_parent_chain({co_address: coro_frame_address, fn_address: coro_fn }, call_stack_depth, dll_base_start, dll_base_end);
+    var fn_stack = stack.reduce(function(acc, s) { return s.fn_address + "," + acc; }, "");
+
+    log("coro_frame, function_address");
+    for (var frame of stack) {
+        log(frame.co_address + ", " + frame.fn_address);
+    }
+    print_stack_from_addresses(fn_stack);
 }
 
 function log(x) {
@@ -119,7 +144,7 @@ function exec(cmdstr, quiet) {
 }
 
 function is_valid_address(address) {
-    return address > 0x100000; // todo: should be some high value;
+    return address > 0x7F000000; // first 2 GB is kernel virtual memory
 }
 
 function is_valid_function_address(address, dll_base_start, dll_base_end) {
