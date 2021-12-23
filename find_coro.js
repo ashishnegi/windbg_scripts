@@ -1,27 +1,43 @@
+// Windbg extension functions to help with coroutines debug analysis.
+//
+// Usage:
+// 1. save this file to a location.
+// In windbg,
+// > .load jsprovider.dll
+// > .scriptload <Path_to_this_file>\find_coro.js
+// Now you can call methods like for unique_coroutine_frames
+// > dx @$scriptContents.unique_coroutine_frames("00007ff62318bf80", 600, 3, 0x00007ff621310000, 0x00007ff624210000)
+//
+// Dependencies: `mex.dll` windbg extension. You can download it from https://aka.ms/mex and then
+// > .load <path_to_mex>/mex.dll
+//
+// Run below command to reflect any changes you make to this file within same debugging session:
+// > .scriptunload D:\windbg\scripts\find_coro.js;
+
+// unique_coroutine_frames:
 // Groups all coroutine frames for a coroutine function into unique stack walks.
 // This helps in finding what all coroutines are present in process/dump.
 // This is a best effort system. The output will mostly be good but can have some noise as
 // we don't know when to stop walking up the coroutine parent frames.
 // parameters:
 // coro_fn_address  : (String) Address of coroutine function for which you want to find all stack frames.
-//                    You can get this value from output of `x FabricRuntime!*TStore*TryGetValueAsync*_ResumeCoro$2`.
+//                    You can get this value from output of `x exe_or_dll_name!*class_name*func_name*_ResumeCoro$2`.
 //                    This needs to be hex address.
 // first_n          : (Int) Look at first n heaps containing coro_fn_address.
 // call_stack_depth : (Int) Depth to go down in call stack. Start from low numbers like `3`.
 // dll_base_start   : (Long) start address of functions above which only we consider coroutine walk to continue.
 // dll_base_end     : (Long) end address of functions under which we consider coroutine walk to continue.
-//                    You can get dll_base_start/end from e.g. `lmDf m FabricRuntime`
+//                    You can get dll_base_start/end from e.g. `lmDf m exe_or_dll_name`
+//
 // example usage:
 //> dx @$scriptContents.unique_coroutine_frames("00007ff62318bf80", 600, 3, 0x00007ff621310000, 0x00007ff624210000)
 // Printing Map.
 // Map size: 1
-//,0x7ff62210b9f0,0x7ff623035ee0,00007ff62318bf80 => 512
-//> u 00007ff62318bf80
-//  Fabric!Data::TStore::Store<KSharedPtr<KString>,KSharedPtr<KBuffer> >::TryGetValueAsync$_ResumeCoro$2 [C:\__w\1\s\src\prod\src\data\tstore\Store.h @ 1040]:
-//> u 0x7ff623035ee0
-//  Fabric!Data::TStore::Store<KSharedPtr<KString>,KSharedPtr<KBuffer> >::ConditionalGetAsync$_ResumeCoro$2 [C:\__w\1\s\src\prod\src\data\tstore\Store.h @ 846]:
-//> u 0x7ff62210b9f0
-//  Fabric!<lambda_82983005e362cd54ae843770683bcb01>$_ResumeCoro$2::operator() [C:\__w\1\s\src\prod\src\Store\TSReplicatedStore.cpp @ 540]:
+// 00007ff62318bf80,0x7ff623035ee0,0x7ff62210b9f0, => 8
+//> dx @$scriptContents.print_stack_from_addresses("00007ff62318bf80,0x7ff623035ee0,0x7ff62210b9f0,")
+// exe_or_dll!namespace1::fn1$_ResumeCoro$2 [src_path1 @ 1040]:
+// exe_or_dll!namespace1::fn2$_ResumeCoro$2 [src_path2 @ 846]:
+// exe_or_dll!<lambda_82983005e362cd54ae843770683bcb01>$_ResumeCoro$2::operator() [src_path3 @ 540]:
 function unique_coroutine_frames(coro_fn_addres, first_n, call_stack_depth, dll_base_start, dll_base_end) {
     if (coro_fn_addres.startsWith("0x")) {
         coro_fn_addres = coro_fn_addres.substr(2);
@@ -36,12 +52,12 @@ function unique_coroutine_frames(coro_fn_addres, first_n, call_stack_depth, dll_
         var parent  = parents[i];
         // log("> " + parent.co_address + " " + parent.fn_address);
         var stack = walk_parent_chain(parent, call_stack_depth, dll_base_start, dll_base_end);
-        var fn_stack = stack.reduce(function(acc, s) { return acc + "," + s.fn_address; }, "");
+        var fn_stack_key = stack.reduce(function(acc, s) { return s.fn_address + "," + acc; }, "");
 
-        if (fn_stacks.has(fn_stack)) {
-            fn_stacks.set(fn_stack, fn_stacks.get(fn_stack) + 1);
+        if (fn_stacks.has(fn_stack_key)) {
+            fn_stacks.set(fn_stack_key, fn_stacks.get(fn_stack_key) + 1);
         } else {
-            fn_stacks.set(fn_stack, 1);
+            fn_stacks.set(fn_stack_key, 1);
         }
     }
 
@@ -53,7 +69,8 @@ function unique_coroutine_frames(coro_fn_addres, first_n, call_stack_depth, dll_
     return fn_stacks;
 }
 
-// coro_pattern   : (String) example: Fabric!*ConditioanlGetAsync*_ResumeCoro$2
+// all_unique_coroutine_frames:
+// coro_pattern : (String) example: exe_or_dll_name!*class_name*func_name*_ResumeCoro$2 or more generic pattern.
 // see doc for `unique_coroutine_frames` for other parameters.
 function all_unique_coroutine_frames(coro_pattern, first_n, call_stack_depth, dll_base_start, dll_base_end) {
     var lines = exec("x " + coro_pattern);
@@ -75,12 +92,29 @@ function all_unique_coroutine_frames(coro_pattern, first_n, call_stack_depth, dl
     }
 }
 
+// print_stack_from_addresses:
+// Prints function names for stack represented by addresses.
+// addresses : (String) command separated list of addresses.
+// example usage:
+// dx @$scriptContents.print_stack_from_addresses(",0x7ff62210b9f0,0x7ff623035ee0,00007ff62318bf80")
+function print_stack_from_addresses(addresses) {
+    for (var address of addresses.split(',')) {
+        if (!address || address.length == 0) {
+            continue;
+        }
+        exec(" !mex.head -n 1 u " + address, true /*quiet*/);
+    }
+}
+
 function log(x) {
     host.diagnostics.debugLog(x + "\n")
 }
 
-function exec(cmdstr) {
-    log("Executing: " + cmdstr);
+function exec(cmdstr, quiet) {
+    if (!quiet) {
+        log("Executing: " + cmdstr);
+    }
+
     return host.namespace.Debugger.Utility.Control.ExecuteCommand(cmdstr);
 }
 
