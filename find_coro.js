@@ -5,6 +5,7 @@
 // parameters:
 // coro_fn_address  : (String) Address of coroutine function for which you want to find all stack frames.
 //                    You can get this value from output of `x FabricRuntime!*TStore*TryGetValueAsync*_ResumeCoro$2`.
+//                    This needs to be hex address.
 // first_n          : (Int) Look at first n heaps containing coro_fn_address.
 // call_stack_depth : (Int) Depth to go down in call stack. Start from low numbers like `3`.
 // dll_base_start   : (Long) start address of functions above which only we consider coroutine walk to continue.
@@ -22,6 +23,10 @@
 //> u 0x7ff62210b9f0
 //  Fabric!<lambda_82983005e362cd54ae843770683bcb01>$_ResumeCoro$2::operator() [C:\__w\1\s\src\prod\src\Store\TSReplicatedStore.cpp @ 540]:
 function unique_coroutine_frames(coro_fn_addres, first_n, call_stack_depth, dll_base_start, dll_base_end) {
+    if (coro_fn_addres.startsWith("0x")) {
+        coro_fn_addres = coro_fn_addres.substr(2);
+    }
+
     dll_base_start = parseInt(dll_base_start, 16);
     dll_base_end = parseInt(dll_base_end, 16);
 
@@ -48,11 +53,34 @@ function unique_coroutine_frames(coro_fn_addres, first_n, call_stack_depth, dll_
     return fn_stacks;
 }
 
+// coro_pattern   : (String) example: Fabric!*ConditioanlGetAsync*_ResumeCoro$2
+// see doc for `unique_coroutine_frames` for other parameters.
+function all_unique_coroutine_frames(coro_pattern, first_n, call_stack_depth, dll_base_start, dll_base_end) {
+    var lines = exec("x " + coro_pattern);
+
+    for (line of lines) {
+        if (!line) {
+            continue;
+        }
+
+        var splits = line.split(' ');
+
+        var fn_address = splits[0];
+        var fn_name = line.substr(fn_address.length);
+
+        fn_address = fn_address.replace('`', '');
+
+        log("Finding unique_coroutine_frames for " + fn_address + " " + fn_name);
+        unique_coroutine_frames(fn_address, first_n, call_stack_depth, dll_base_start, dll_base_end);
+    }
+}
+
 function log(x) {
     host.diagnostics.debugLog(x + "\n")
 }
 
 function exec(cmdstr) {
+    log("Executing: " + cmdstr);
     return host.namespace.Debugger.Utility.Control.ExecuteCommand(cmdstr);
 }
 
@@ -104,6 +132,7 @@ function walk_parent_chain(child, call_stack_depth, dll_base_start, dll_base_end
     // since we don't know when to stop walking up the frame,
     // make some good guesses by checking if memory addresses look valid or not.
     if (!is_valid_address(parent_co_ref_addres)) {
+        // log("not a valid addres " + parent_co_ref_addres);
         return [];
     }
 
