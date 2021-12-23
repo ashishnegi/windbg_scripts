@@ -5,7 +5,7 @@
 * 1. save this file to a location.
 * In windbg,
 * > .load jsprovider.dll
-* > .scriptload <Path_to_this_file>\find_coro.js
+* > .scriptload <Path_to_this_file>\coroutines.js
 * Now you can call methods like for unique_coroutine_frames
 * > dx @$scriptContents.unique_coroutine_frames("00007ff62318bf80", 600, 3, 0x00007ff621310000, 0x00007ff624210000)
 *
@@ -13,7 +13,7 @@
 * > .load <path_to_mex>/mex.dll
 *
 * Run below command to reflect any changes you make to this file within same debugging session:
-* > .scriptunload D:\windbg\scripts\find_coro.js;
+* > .scriptunload <Path_to_this_file>\coroutines.js;
 */
 
 // unique_coroutine_frames:

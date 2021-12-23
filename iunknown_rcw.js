@@ -4,7 +4,7 @@ function log(x) {
 function exec(cmdstr) {
     return host.namespace.Debugger.Utility.Control.ExecuteCommand(cmdstr);
 }
-function rcw(first) {
+function all_rcws() {
     var obs = exec("!DumpHeap -short -type System.__ComObject")
     for (i of obs) {
         var cstr = "!do -nofields " + i
