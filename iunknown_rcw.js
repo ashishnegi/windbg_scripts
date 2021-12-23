@@ -1,9 +1,3 @@
-function log(x) {
-    host.diagnostics.debugLog(x + "\n")
-}
-function exec(cmdstr) {
-    return host.namespace.Debugger.Utility.Control.ExecuteCommand(cmdstr);
-}
 function all_rcws() {
     var obs = exec("!DumpHeap -short -type System.__ComObject")
     for (i of obs) {
@@ -38,4 +32,12 @@ function find_rcw(iuknown) {
             }
         }
     }
+}
+
+function log(x) {
+    host.diagnostics.debugLog(x + "\n")
+}
+
+function exec(cmdstr) {
+    return host.namespace.Debugger.Utility.Control.ExecuteCommand(cmdstr);
 }
