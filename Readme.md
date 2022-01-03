@@ -35,7 +35,7 @@ exe_or_dll!<lambda_82983005e362cd54ae843770683bcb01>$_ResumeCoro$2::operator() [
 // coro_frame_address : (Int) address of child coroutine_frame from where to start the async stack walk.
 // see doc for `unique_coroutine_frames` for other parameters.
 // example usage:
-// > dx @$scriptContents.walk_coroutine_chain("365840500768", 4, 0x00007ff621310000, 0x00007ff624210000)
+// > dx @$scriptContents.walk_coroutine_chain(365840500768, 4, 0x00007ff621310000, 0x00007ff624210000)
 //
 // You can get coroutine frame address from below command:
 //    > !mex.fel -x "dq 0x${@#Line}+0x40 L1" !mex.head -n <limit_to_n_output> !mex.cut -f 5 !mex.grep busy !ext.heap -srch <coroutine_func_address>
